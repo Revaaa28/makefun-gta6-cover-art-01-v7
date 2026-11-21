@@ -25,7 +25,7 @@ const subtitleInput = $('subtitleInput');
 const heatSel = $('heatSel');
 const zoomRange = $('zoomRange');
 const slotHint = $('slotHint');
-const thumbsEl = $('thumbs');
+const libraryEl = $('library');
 
 for (const [name, def] of Object.entries(LAYOUTS)) {
   const opt = document.createElement('option');
@@ -99,13 +99,13 @@ function syncControls() {
 
 function markActiveThumb() {
   const current = state.slots[state.layout][selected];
-  for (const el of thumbsEl.children) {
+  for (const el of libraryEl.children) {
     el.classList.toggle('active', el.dataset.photo === current);
   }
 }
 
 function buildThumbs() {
-  thumbsEl.innerHTML = '';
+  libraryEl.innerHTML = '';
   for (const def of PHOTO_DEFS) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -122,7 +122,7 @@ function buildThumbs() {
         state.slots[state.layout][selected] = def.id;
       });
     });
-    thumbsEl.appendChild(btn);
+    libraryEl.appendChild(btn);
   }
 }
 

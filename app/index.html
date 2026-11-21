@@ -84,12 +84,12 @@
 
   <aside class="panel library">
     <h2>Photos</h2>
-    <div id="thumbs" class="thumbs"></div>
-    <label class="upload">
-      <span>＋ Add your photo</span>
-      <input id="uploadInput" type="file" accept="image/*" hidden>
+    <div id="library" class="thumbs"></div>
+    <label class="upload" for="uploadInput">
+      <span>Upload your photo</span>
+      <input id="uploadInput" type="file" accept="image/*" aria-label="Upload your photo" hidden>
     </label>
-    <p class="hint">Your photos never leave this page. Everything runs offline.</p>
+    <p class="hint">Upload your photo, then click a panel on the cover and a photo in the library to place it. Your photos never leave this page. Everything runs offline.</p>
   </aside>
 </main>
 

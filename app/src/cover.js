@@ -277,14 +277,16 @@ function halftoneField(ctx, rect, gradeName) {
   for (const [t, hex] of stops) grad.addColorStop(t, hex);
   ctx.fillStyle = grad;
   ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  // dots grow toward the bottom of the block, like a printed screen
-  const step = Math.max(7, rect.w * 0.028);
-  ctx.fillStyle = 'rgba(16,8,30,0.35)';
+  // Fine dots, softly blended into the sunset gradient so the block
+  // reads as a neon-sunset glow rather than a coarse printed screen;
+  // they still grow gently toward the bottom of the block.
+  const step = Math.max(4, rect.w * 0.013);
+  ctx.fillStyle = 'rgba(24,8,44,0.20)';
   for (let row = 0, y = rect.y + step / 2; y < rect.y + rect.h; row++, y += step) {
-    const r = step * 0.16 + (row * step * 0.012);
+    const r = step * 0.14 + (row * step * 0.006);
     for (let x = rect.x + step / 2 + (row % 2) * step * 0.5; x < rect.x + rect.w; x += step) {
       ctx.beginPath();
-      ctx.arc(x, y, Math.min(r, step * 0.42), 0, Math.PI * 2);
+      ctx.arc(x, y, Math.min(r, step * 0.4), 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -431,7 +433,14 @@ export function renderCover(ctx, W, H, state, images) {
     const subSize = tb.h * 0.15;
     const avail = tb.h - pad * 2 - starSize * 1.6 - subSize * 1.35;
     const base = Math.min(tb.h * 0.3, avail / Math.max(1, lines.length) / 0.98);
-    const used = drawTitle(ctx, lines, tb.x + tb.w / 2, tb.y + pad, tb.w * 0.92, base);
+    // Sunset-gradient lettering (amber -> orange -> pink -> purple),
+    // the classic GTA title treatment, over the halftone sunset block.
+    const titleGrad = ctx.createLinearGradient(0, tb.y, 0, tb.y + tb.h);
+    titleGrad.addColorStop(0, '#ffd23e');
+    titleGrad.addColorStop(0.35, '#ff8a3c');
+    titleGrad.addColorStop(0.65, '#ff3d7e');
+    titleGrad.addColorStop(1, '#7b2ff7');
+    const used = drawTitle(ctx, lines, tb.x + tb.w / 2, tb.y + pad, tb.w * 0.92, base, titleGrad);
     drawSubtitle(ctx, state.subtitle, tb.x + tb.w / 2, tb.y + pad + used + tb.h * 0.015, subSize);
     const pillW = starSize * 6.9;
     const pillH = starSize * 1.55;
