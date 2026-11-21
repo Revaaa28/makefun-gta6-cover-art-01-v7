@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VICEPRINT — Palm Heat Cover Studio</title>
+<meta name="description" content="Turn your photos and a caption into GTA-style multi-panel poster covers. Export PNG in 1080x1080, 1080x1350, 1920x1080 and story size.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">VP</span>
+    <span class="brand-text">VICEPRINT <small>Palm Heat Cover Studio</small></span>
+  </div>
+  <div class="export-bar">
+    <label class="field inline">
+      <span>Size</span>
+      <select id="exportSize">
+        <option value="1080x1080">Square 1080×1080</option>
+        <option value="1080x1350">Portrait 1080×1350</option>
+        <option value="1920x1080">Wide 1920×1080</option>
+        <option value="1080x1920">Story 1080×1920</option>
+      </select>
+    </label>
+    <button id="exportBtn" class="primary" type="button">Export PNG</button>
+    <button id="exportAllBtn" type="button">Export all</button>
+  </div>
+</header>
+
+<main class="workspace">
+  <aside class="panel controls">
+    <h2>Cover</h2>
+    <label class="field">
+      <span>Layout</span>
+      <select id="layoutSel"></select>
+    </label>
+    <label class="field">
+      <span>Colour grade</span>
+      <select id="gradeSel"></select>
+    </label>
+    <label class="field">
+      <span>Title</span>
+      <input id="titleInput" type="text" maxlength="26" value="PALM HEAT">
+    </label>
+    <label class="field">
+      <span>Subtitle</span>
+      <input id="subtitleInput" type="text" maxlength="34" value="One Last Score">
+    </label>
+    <label class="field">
+      <span>Heat</span>
+      <select id="heatSel">
+        <option value="1">★</option>
+        <option value="2">★★</option>
+        <option value="3">★★★</option>
+        <option value="4">★★★★</option>
+        <option value="5" selected>★★★★★</option>
+      </select>
+    </label>
+
+    <h2>Selected panel</h2>
+    <p class="hint" id="slotHint">Click a panel on the cover, then a photo.</p>
+    <label class="field">
+      <span>Zoom</span>
+      <input id="zoomRange" type="range" min="1" max="3" step="0.01" value="1">
+    </label>
+    <p class="hint">Drag on the cover to pan the selected panel's photo.</p>
+
+    <h2>Arrange</h2>
+    <div class="btn-row">
+      <button id="shuffleBtn" type="button">Shuffle</button>
+      <button id="spreadBtn" type="button">Spread one photo</button>
+    </div>
+    <div class="btn-row">
+      <button id="undoBtn" type="button">↩ Undo</button>
+      <button id="redoBtn" type="button">↪ Redo</button>
+    </div>
+  </aside>
+
+  <section class="stage">
+    <canvas id="cover" width="1000" height="750"></canvas>
+    <p class="hint stage-hint">Live preview — exports render at full size.</p>
+  </section>
+
+  <aside class="panel library">
+    <h2>Photos</h2>
+    <div id="thumbs" class="thumbs"></div>
+    <label class="upload">
+      <span>＋ Add your photo</span>
+      <input id="uploadInput" type="file" accept="image/*" hidden>
+    </label>
+    <p class="hint">Your photos never leave this page. Everything runs offline.</p>
+  </aside>
+</main>
+
+<script type="module" src="src/main.js"></script>
+<script type="module" src="src/shots.js"></script>
+</body>
+</html>
