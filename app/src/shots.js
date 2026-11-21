@@ -4,6 +4,10 @@
 // shots.json, renders it, and flags data-shot-ready on <html> so a
 // headless browser can capture the frame. Without the parameter it
 // does nothing and the editor runs as usual.
+//
+// The scene set: cover + editor show the castPoster flagship in the
+// Golden Cast grade, portrait runs the same layout in its tall
+// composition, and square runs it at 1:1.
 
 import { defaultState, loadAllPhotos, renderCover } from './cover.js';
 
@@ -41,7 +45,10 @@ async function fetchScenes() {
 async function run(name) {
   const scenes = await fetchScenes();
   const scene = scenes[name];
-  if (!scene) throw new Error(`unknown shot scene: ${name}`);
+  if (!scene) throw new Error(`unknown shot scene: ${name} (have: ${Object.keys(scenes).join(', ')})`);
+  if (!['cover', 'editor'].includes(scene.mode)) {
+    throw new Error(`shot scene ${name} has unknown mode: ${scene.mode}`);
+  }
 
   const state = defaultState();
   Object.assign(state, scene.state);
@@ -71,5 +78,9 @@ async function run(name) {
   }
 
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // Never flag a capture before the web fonts land: the script
+  // subtitle and display lettering must not be photographed in a
+  // fallback font.
+  await document.fonts.ready;
   document.documentElement.dataset.shotReady = '1';
 }

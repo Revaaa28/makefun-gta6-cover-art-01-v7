@@ -7,6 +7,13 @@
 // heat stars and a studio badge. No network, no libraries: canvas only.
 
 export const PHOTO_DEFS = [
+  { id: 'cast-hero', src: 'assets/cast-hero.jpg', label: 'The Boss' },
+  { id: 'cast-driver', src: 'assets/cast-driver.jpg', label: 'The Driver' },
+  { id: 'cast-rider', src: 'assets/cast-rider.jpg', label: 'The Rider' },
+  { id: 'cast-mechanic', src: 'assets/cast-mechanic.jpg', label: 'The Mechanic' },
+  { id: 'cast-captain', src: 'assets/cast-captain.jpg', label: 'The Captain' },
+  { id: 'cast-fixer', src: 'assets/cast-fixer.jpg', label: 'The Fixer' },
+  { id: 'cast-lookout', src: 'assets/cast-lookout.jpg', label: 'The Lookout' },
   { id: 'hero', src: 'assets/hero.jpg', label: 'Convertible' },
   { id: 'rooftop', src: 'assets/rooftop.jpg', label: 'Rooftop' },
   { id: 'friends', src: 'assets/friends.jpg', label: 'Friends' },
@@ -25,6 +32,11 @@ export const GRADES = {
     label: 'Poster Ink',
     bands: 6, mix: 0.88, saturation: 1.25, contrast: 1.12, brightness: 1.0,
     stops: [[0, '#171233'], [0.28, '#5b1e78'], [0.52, '#c22a6d'], [0.74, '#f06423'], [0.9, '#ffb347'], [1, '#fff3c4']],
+  },
+  goldenCast: {
+    label: 'Golden Cast',
+    bands: 0, mix: 0.3, saturation: 1.14, contrast: 1.06, brightness: 1.02,
+    stops: [[0, '#241108'], [0.4, '#8a4a1e'], [0.75, '#e89a4e'], [1, '#fff0cd']],
   },
   sunsetDuotone: {
     label: 'Sunset Duotone',
@@ -54,10 +66,14 @@ export const GRADES = {
 };
 
 export const LAYOUTS = {
+  castPoster: { label: 'Cast Poster', slots: 7 },
   posterNine: { label: 'Poster Nine', slots: 8 },
   tiltedStack: { label: 'Tilted Stack', slots: 4 },
   heroStrip: { label: 'Hero + Strip', slots: 4 },
 };
+
+// Role name tags printed on the cast panels, one per castPoster slot.
+export const CAST_TAGS = ['THE BOSS', 'THE DRIVER', 'THE RIDER', 'THE MECHANIC', 'THE CAPTAIN', 'THE FIXER', 'THE LOOKOUT'];
 
 const DISPLAY_FONT = '"Arial Black", "Helvetica Neue", Helvetica, Arial, sans-serif';
 const SCRIPT_FONT = 'italic 700 1px "Brush Script MT", "Segoe Script", "Comic Sans MS", cursive';
@@ -65,13 +81,14 @@ const SCRIPT_FONT = 'italic 700 1px "Brush Script MT", "Segoe Script", "Comic Sa
 export function defaultState() {
   const ids = PHOTO_DEFS.map((p) => p.id);
   return {
-    layout: 'posterNine',
-    grade: 'posterInk',
+    layout: 'castPoster',
+    grade: 'goldenCast',
     title: 'PALM HEAT',
     subtitle: 'One Last Score',
     heat: 5,
     slots: {
-      posterNine: ids.slice(0, 8),
+      castPoster: ids.slice(0, 7),
+      posterNine: ['hero', 'rooftop', 'friends', 'pool', 'marina', 'drive', 'boulevard', 'pier'],
       tiltedStack: ['rooftop', 'friends', 'marina', 'drive'],
       heroStrip: ['hero', 'pool', 'friends', 'boulevard'],
     },
@@ -81,6 +98,78 @@ export function defaultState() {
 
 export function viewOf(state, slot) {
   return state.views[`${state.layout}:${slot}`] ?? { x: 0.5, y: 0.5, zoom: 1 };
+}
+
+// ------------------------------------------------------- face-aware crop
+// Face-aware crop anchor: a panel crop should centre on the face, not
+// on the blind middle of the photo. faceAnchor draws the photo to a
+// small offscreen canvas, scans the whole frame for skin-tone-ish
+// pixels and returns their centroid (in 0..1 image coordinates) as the
+// crop anchor. When no convincing skin cluster is found it falls back
+// to the upper-third centre, where a face usually sits in a portrait.
+const faceAnchorCache = new Map();
+export function faceAnchor(img) {
+  const key = img.src || '';
+  if (faceAnchorCache.has(key)) return faceAnchorCache.get(key);
+  let anchor = { x: 0.5, y: 0.38 };
+  try {
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    const w = 96;
+    const h = Math.max(2, Math.round((w * ih) / iw));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const scan = c.getContext('2d', { willReadFrequently: true });
+    scan.drawImage(img, 0, 0, w, h);
+    const px = scan.getImageData(0, 0, w, h).data;
+    let n = 0;
+    let sx = 0;
+    let sy = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        const r = px[i];
+        const g = px[i + 1];
+        const b = px[i + 2];
+        const mx = Math.max(r, g, b);
+        const mn = Math.min(r, g, b);
+        // The saturation clause keeps sunlit grey or blonde hair —
+        // bright but washed out — from counting as skin and dragging
+        // the anchor up into the hairline.
+        const skin = r > 95 && g > 40 && b > 20 && r > g && r > b && r - g > 15 && r - b > 10 && r < 250 && mx - mn > mx * 0.3;
+        if (skin) {
+          n++;
+          sx += x;
+          sy += y;
+        }
+      }
+    }
+    if (n >= Math.max(30, w * h * 0.02)) {
+      anchor = {
+        x: Math.min(0.8, Math.max(0.2, sx / n / w)),
+        y: Math.min(0.75, Math.max(0.15, sy / n / h)),
+      };
+    }
+  } catch {
+    // keep the fallback anchor
+  }
+  faceAnchorCache.set(key, anchor);
+  return anchor;
+}
+
+// The view a cast panel renders with: the user's own pan/zoom when
+// they have touched the panel, otherwise the face-aware anchor —
+// zoomed in further on the hero slot so the lead face lands large.
+// In a tall hero panel the anchor is also eased down the face, so
+// the face rides high in the frame and the title stack overlaps the
+// jaw and neck, never the eyes.
+export function castView(state, slot, rawImg, tallPanel = false) {
+  const custom = state.views[`${state.layout}:${slot}`];
+  if (custom) return custom;
+  const a = faceAnchor(rawImg);
+  if (slot === 0 && tallPanel) return { x: a.x, y: Math.min(0.78, a.y + 0.1), zoom: 1.22 };
+  return { x: a.x, y: a.y, zoom: slot === 0 ? 1.22 : 1.08 };
 }
 
 // ---------------------------------------------------------------- images
@@ -367,6 +456,56 @@ export function computeLayout(name, W, H) {
       ],
     };
   }
+  if (name === 'castPoster') {
+    const stripH = Math.round(H * 0.075);
+    const billH = Math.round(H * 0.088);
+    const m = W * 0.012;
+    const gp = Math.max(4, W * 0.007);
+    const fy = stripH + gp;
+    const fh = H - stripH - billH - gp * 2;
+    const innerW = W - m * 2;
+    const mk = (x, y, w, h, slot) => ({ x, y, w, h, slot, tag: CAST_TAGS[slot] });
+    let panels;
+    if (W >= H * 1.15) {
+      // Landscape: two stacked portraits on the left, the giant hero
+      // face close-up in the centre, two columns of stacked portraits
+      // on the right. Every panel is a person.
+      const heroW = innerW * 0.28;
+      const sideW = (innerW - heroW - gp * 2) / 2;
+      const colW = (sideW - gp) / 2;
+      const cellH = (fh - gp) / 2;
+      const lx = m;
+      const hx = m + sideW + gp;
+      const rx = hx + heroW + gp;
+      panels = [
+        mk(hx, fy, heroW, fh, 0),
+        mk(lx, fy, sideW, cellH, 1),
+        mk(lx, fy + cellH + gp, sideW, cellH, 2),
+        mk(rx, fy, colW, cellH, 3),
+        mk(rx + colW + gp, fy, colW, cellH, 4),
+        mk(rx, fy + cellH + gp, colW, cellH, 5),
+        mk(rx + colW + gp, fy + cellH + gp, colW, cellH, 6),
+      ];
+    } else {
+      // Portrait and square: the hero across the top, the rest of the
+      // cast in a two-column grid beneath.
+      const heroH = fh * 0.36;
+      const cellW = (innerW - gp) / 2;
+      const cellH = (fh - heroH - gp * 3) / 3;
+      panels = [mk(m, fy, innerW, heroH, 0)];
+      for (let i = 0; i < 6; i++) {
+        const cx = m + (i % 2) * (cellW + gp);
+        const cy = fy + heroH + gp + Math.floor(i / 2) * (cellH + gp);
+        panels.push(mk(cx, cy, cellW, cellH, i + 1));
+      }
+    }
+    return {
+      gutter: gp,
+      strip: { x: 0, y: 0, w: W, h: stripH },
+      billing: { x: 0, y: H - billH, w: W, h: billH },
+      panels,
+    };
+  }
   if (name === 'tiltedStack') {
     const pw = W * 0.52;
     const ph = H * 0.34;
@@ -401,6 +540,90 @@ export function computeLayout(name, W, H) {
   };
 }
 
+// ------------------------------------------------------- cast poster kit
+
+// Slanted black name-tag chip with a gold slash, in a panel corner.
+function drawNameTag(ctx, panel, tag, W, atTop = false) {
+  const size = Math.max(11, W * 0.0135);
+  ctx.save();
+  ctx.font = `900 ${size}px "Arial Narrow", ${DISPLAY_FONT}`;
+  const tw = ctx.measureText(tag).width;
+  const chipW = tw + size * 2.3;
+  const chipH = size * 1.7;
+  const inset = W * 0.006;
+  const x = panel.x + inset;
+  const y = atTop ? panel.y + inset : panel.y + panel.h - chipH - inset;
+  ctx.translate(x, y);
+  ctx.transform(1, 0, -0.18, 1, 0, 0);
+  ctx.fillStyle = 'rgba(8,6,16,0.88)';
+  ctx.fillRect(0, 0, chipW, chipH);
+  ctx.fillStyle = '#ffc21f';
+  ctx.fillRect(size * 0.38, chipH * 0.18, size * 0.16, chipH * 0.64);
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(tag, size * 0.78, chipH / 2 + 1);
+  ctx.restore();
+}
+
+// Stacked title lettering in striped chrome: sunset bands running
+// through the letters, a bright chrome highlight line across the
+// middle, a white outline and a hard drop shadow.
+function drawChromeTitle(ctx, lines, cx, top, maxW, baseSize) {
+  let y = top;
+  for (const line of lines) {
+    const size = fitText(ctx, line, maxW, baseSize, DISPLAY_FONT);
+    ctx.font = `900 ${size}px ${DISPLAY_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(10,5,20,0.85)';
+    ctx.fillText(line, cx + size * 0.05, y + size * 0.06);
+    const grad = ctx.createLinearGradient(0, y, 0, y + size);
+    grad.addColorStop(0, '#fff6d8');
+    grad.addColorStop(0.22, '#ffd23e');
+    grad.addColorStop(0.45, '#ff8a3c');
+    grad.addColorStop(0.52, '#fff8e6');
+    grad.addColorStop(0.58, '#ff3d7e');
+    grad.addColorStop(0.8, '#c22a6d');
+    grad.addColorStop(1, '#5b1e78');
+    ctx.lineWidth = size * 0.055;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeText(line, cx, y);
+    ctx.fillStyle = grad;
+    ctx.fillText(line, cx, y);
+    y += size * 0.98;
+  }
+  return y - top;
+}
+
+// Gold seal: ringed badge with a star and the selection wording.
+function drawCastSeal(ctx, cx, cy, r) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#c9971f';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.86, 0, Math.PI * 2);
+  ctx.fillStyle = '#171233';
+  ctx.fill();
+  ctx.lineWidth = r * 0.03;
+  ctx.strokeStyle = '#ffe9a8';
+  ctx.stroke();
+  star(ctx, cx, cy - r * 0.34, r * 0.3, '#ffc21f');
+  ctx.fillStyle = '#fff3c4';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${r * 0.185}px ${DISPLAY_FONT}`;
+  ctx.fillText('OFFICIAL', cx, cy + r * 0.22);
+  ctx.fillText('SELECTION', cx, cy + r * 0.45);
+  ctx.font = `700 ${r * 0.13}px ${DISPLAY_FONT}`;
+  ctx.fillStyle = 'rgba(255,243,196,0.75)';
+  ctx.fillText('PALM HEAT', cx, cy + r * 0.66);
+  ctx.restore();
+}
+
 // --------------------------------------------------------------- render
 
 export function renderCover(ctx, W, H, state, images) {
@@ -413,7 +636,166 @@ export function renderCover(ctx, W, H, state, images) {
   ctx.save();
   ctx.clearRect(0, 0, W, H);
 
-  if (state.layout === 'posterNine') {
+  if (state.layout === 'castPoster') {
+    const L = computeLayout('castPoster', W, H);
+    const wide = W >= H * 1.15;
+    // dark poster ground
+    ctx.fillStyle = '#100c1e';
+    ctx.fillRect(0, 0, W, H);
+    // ---- top strip: stars + review quote on the left, VOL. 1 box right
+    const st = L.strip;
+    ctx.fillStyle = '#0a0714';
+    ctx.fillRect(st.x, st.y, st.w, st.h);
+    const starSize = st.h * 0.34;
+    drawStars(ctx, W * 0.022, st.y + (st.h - starSize) / 2, starSize, state.heat);
+    const quoteX = W * 0.022 + starSize * 6.9;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f3ead2';
+    const quote = '"A SUN-SCORCHED RIDE YOU CAN FEEL"';
+    const qSize = fitText(ctx, quote, W * 0.6, st.h * 0.3, DISPLAY_FONT, 700);
+    ctx.font = `700 ${qSize}px ${DISPLAY_FONT}`;
+    ctx.fillText(quote, quoteX, st.y + st.h * 0.36);
+    ctx.fillStyle = '#ffc21f';
+    const srcSize = fitText(ctx, '— THE PALM GAZETTE', W * 0.6, st.h * 0.24, DISPLAY_FONT, 700);
+    ctx.font = `700 ${srcSize}px ${DISPLAY_FONT}`;
+    ctx.fillText('— THE PALM GAZETTE', quoteX, st.y + st.h * 0.73);
+    const volW = W * 0.075;
+    const volH = st.h * 0.62;
+    const volX = W - W * 0.022 - volW;
+    const volY = st.y + (st.h - volH) / 2;
+    ctx.strokeStyle = '#f3ead2';
+    ctx.lineWidth = Math.max(1.5, W * 0.0016);
+    ctx.strokeRect(volX, volY, volW, volH);
+    ctx.fillStyle = '#f3ead2';
+    ctx.textAlign = 'center';
+    const volSize = fitText(ctx, 'VOL. 1', volW * 0.88, volH * 0.44, DISPLAY_FONT);
+    ctx.font = `900 ${volSize}px ${DISPLAY_FONT}`;
+    ctx.fillText('VOL. 1', volX + volW / 2, volY + volH / 2 + 1);
+    // ---- panel field: every panel a person, face-aware crop
+    for (const p of L.panels) {
+      const id = state.slots[state.layout][p.slot];
+      const raw = images.get(id);
+      if (raw) {
+        const img = processedPhoto(raw, grade);
+        drawPanelImage(ctx, img, p, castView(state, p.slot, raw, p.h > p.w * 1.2));
+        // warm cinematic wash: sunset light from above, shade below,
+        // so the faces stay photographic under warm light
+        const wash = ctx.createLinearGradient(0, p.y, 0, p.y + p.h);
+        wash.addColorStop(0, 'rgba(255,176,92,0.13)');
+        wash.addColorStop(0.5, 'rgba(255,176,92,0)');
+        wash.addColorStop(1, 'rgba(16,8,32,0.16)');
+        ctx.fillStyle = wash;
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+      }
+      ctx.strokeStyle = 'rgba(243,234,210,0.85)';
+      ctx.lineWidth = Math.max(1.5, W * 0.0016);
+      ctx.strokeRect(p.x, p.y, p.w, p.h);
+    }
+    // ---- sunset-stripe semicircle motif behind the title
+    const tcx = W / 2;
+    const billTop = L.billing.y;
+    const motifR = wide ? W * 0.17 : W * 0.2;
+    const motifBase = billTop - H * 0.045;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(tcx, motifBase, motifR, Math.PI, 0);
+    ctx.closePath();
+    ctx.clip();
+    const stripeCols = ['#ffd23e', '#ffb347', '#ff8a3c', '#f06423', '#ff3d7e', '#c22a6d', '#5b1e78'];
+    const stripeH = motifR / 7;
+    for (let i = 0; i < 7; i++) {
+      ctx.fillStyle = stripeCols[i];
+      ctx.fillRect(tcx - motifR, motifBase - motifR + i * stripeH, motifR * 2, stripeH + 1);
+    }
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(tcx, motifBase, motifR, Math.PI, 0);
+    ctx.strokeStyle = 'rgba(243,234,210,0.9)';
+    ctx.lineWidth = Math.max(1.5, W * 0.0016);
+    ctx.stroke();
+    // ---- striped-chrome title overlapping the panels, lower-centre,
+    // with the neon script subtitle and the ribbon tagline beneath
+    const lines = titleLines(state.title);
+    const titleBase = wide ? H * 0.15 : W * 0.115;
+    const subSize = wide ? H * 0.048 : W * 0.042;
+    const ribbonH = Math.min(H * 0.04, W * 0.032);
+    const ribbonY = motifBase - ribbonH * 0.55;
+    const subTop = ribbonY - subSize * 1.35;
+    let titleH = 0;
+    for (const line of lines) titleH += fitText(ctx, line, W * 0.66, titleBase, DISPLAY_FONT) * 0.98;
+    const titleTop = subTop - H * 0.01 - titleH;
+    drawChromeTitle(ctx, lines, tcx, titleTop, W * 0.66, titleBase);
+    ctx.save();
+    ctx.shadowColor = '#ff3d7e';
+    ctx.shadowBlur = W * 0.012;
+    drawSubtitle(ctx, state.subtitle, tcx, subTop, subSize, '#ff6fb3');
+    ctx.restore();
+    const ribbonText = 'EVERY LAST SUNSET HAS A PRICE';
+    ctx.font = `700 ${ribbonH * 0.5}px ${DISPLAY_FONT}`;
+    const ribbonW = Math.min(W * 0.56, ctx.measureText(ribbonText).width + ribbonH * 2.2);
+    ctx.beginPath();
+    ctx.roundRect(tcx - ribbonW / 2, ribbonY, ribbonW, ribbonH, ribbonH * 0.22);
+    ctx.fillStyle = '#7a1030';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1.5, W * 0.0014);
+    ctx.strokeStyle = '#ffc21f';
+    ctx.stroke();
+    ctx.fillStyle = '#ffe9b8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ribbonText, tcx, ribbonY + ribbonH / 2 + 1);
+    // name tags come after the title stack, so the title and motif
+    // never cover a tag
+    for (const p of L.panels) drawNameTag(ctx, p, p.tag, W, p.slot === 0);
+    // ---- gold seal on the right edge
+    const sealR = W * 0.052;
+    drawCastSeal(ctx, W - sealR * 0.9, motifBase - motifR * 0.35, sealR);
+    // ---- bottom billing block: COMING SOON, dense credits, barcode
+    const bl = L.billing;
+    ctx.fillStyle = '#0a0714';
+    ctx.fillRect(bl.x, bl.y, bl.w, bl.h);
+    ctx.fillStyle = 'rgba(243,234,210,0.25)';
+    ctx.fillRect(bl.x, bl.y, bl.w, 1);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffc21f';
+    // Billing text is sized off the canvas WIDTH: on tall canvases a
+    // height-keyed size overflows the strip and collides with itself.
+    const csSize = Math.min(bl.h * 0.26, W * 0.02);
+    ctx.font = `900 ${csSize}px ${DISPLAY_FONT}`;
+    ctx.fillText('C O M I N G   S O O N', W * 0.022, bl.y + bl.h / 2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(243,234,210,0.88)';
+    const creditFamily = `"Arial Narrow", ${DISPLAY_FONT}`;
+    const credits1 = 'VICEPRINT PICTURES PRESENTS A PALM HEAT STORY "PALM HEAT" MARCO VANE · LUCIA SOL · DEX MARLOWE · ROSA IBARRA · TONY FERRANTE';
+    const credits2 = 'MUSIC BY THE GLASS COAST · EDITED BY N. OKAFOR · PRODUCTION DESIGN MIRA SOLANO · DIRECTOR OF PHOTOGRAPHY ELIAS RENN · WRITTEN BY C. DELGADO · DIRECTED BY A. MARLOWE';
+    const crSize = fitText(ctx, credits2, W * 0.47, Math.min(bl.h * 0.155, W * 0.0125), creditFamily, 700);
+    ctx.font = `700 ${crSize}px ${creditFamily}`;
+    ctx.fillText(credits1, W * 0.545, bl.y + bl.h * 0.32);
+    ctx.fillText(credits2, W * 0.545, bl.y + bl.h * 0.68);
+    const bcW = W * 0.085;
+    const bcH = bl.h * 0.58;
+    const bcX = W - W * 0.022 - bcW;
+    const bcY = bl.y + (bl.h - bcH) / 2;
+    ctx.fillStyle = '#f7f3e8';
+    ctx.fillRect(bcX, bcY, bcW, bcH);
+    ctx.fillStyle = '#14101f';
+    let seed = 20260830;
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    let bx = bcX + bcW * 0.06;
+    while (bx < bcX + bcW * 0.9) {
+      const bw = 1 + rnd() * 3;
+      if (rnd() > 0.42) ctx.fillRect(bx, bcY + bcH * 0.08, bw, bcH * 0.66);
+      bx += bw + 1 + rnd() * 2;
+    }
+    ctx.font = `700 ${bcH * 0.17}px ${DISPLAY_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('8 90126 40771 3', bcX + bcW / 2, bcY + bcH * 0.9);
+  } else if (state.layout === 'posterNine') {
     const L = computeLayout('posterNine', W, H);
     ctx.fillStyle = '#f3ead2';
     ctx.fillRect(0, 0, W, H);
